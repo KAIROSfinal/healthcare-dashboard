@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { socket } from "../services/socket";
 import type { EmergencyIncident } from "../types/emergency";
+import EmergencyMap from "../components/EmergencyMap";
 
 export default function Dashboard() {
   const [incidents, setIncidents] = useState<EmergencyIncident[]>([]);
@@ -31,6 +32,9 @@ export default function Dashboard() {
       <p className="mb-8 text-slate-500">
         Real-time incoming emergency incidents
       </p>
+      <div className="mb-8 overflow-hidden rounded-xl bg-white shadow">
+  <EmergencyMap emergencies={incidents} />
+</div>
 
       {incidents.length === 0 ? (
         <div className="rounded-xl bg-white p-8 text-center shadow">
