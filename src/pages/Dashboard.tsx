@@ -74,7 +74,7 @@ export default function Dashboard() {
                     Latitude
                   </p>
                   <p className="font-semibold">
-                    {incident.latitude}
+                    {incident.location.lat}
                   </p>
                 </div>
 
@@ -83,7 +83,7 @@ export default function Dashboard() {
                     Longitude
                   </p>
                   <p className="font-semibold">
-                    {incident.longitude}
+                    {incident.location.lng}
                   </p>
                 </div>
               </div>

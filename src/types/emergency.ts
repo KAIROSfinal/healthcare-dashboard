@@ -1,7 +1,11 @@
 export interface EmergencyIncident {
   patientId: string;
-  latitude: number;
-  longitude: number;
+  location: {
+    lat: number;
+    lng: number;
+  };
+  hospitalName: string;
+  etaMinutes: number | null;
   status?: string;
   timestamp?: string;
-}   
+}

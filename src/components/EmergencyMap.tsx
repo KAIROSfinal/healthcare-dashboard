@@ -11,6 +11,7 @@ import "leaflet/dist/leaflet.css";
 const redIcon = new L.Icon({
   iconUrl:
     "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+
   shadowUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 
@@ -22,8 +23,14 @@ const redIcon = new L.Icon({
 
 interface Emergency {
   patientId: string;
-  latitude: number;
-  longitude: number;
+
+  location: {
+    lat: number;
+    lng: number;
+  };
+
+  hospitalName: string;
+  etaMinutes: number | null;
 }
 
 interface EmergencyMapProps {
@@ -42,8 +49,8 @@ const EmergencyMap = ({
 
   const center: [number, number] = firstEmergency
     ? [
-        firstEmergency.latitude,
-        firstEmergency.longitude,
+        firstEmergency.location.lat,
+        firstEmergency.location.lng,
       ]
     : defaultPosition;
 
@@ -57,7 +64,7 @@ const EmergencyMap = ({
       }}
     >
       <TileLayer
-        attribution='&copy; OpenStreetMap contributors'
+        attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
@@ -65,19 +72,36 @@ const EmergencyMap = ({
         <Marker
           key={`${emergency.patientId}-${index}`}
           position={[
-            emergency.latitude,
-            emergency.longitude,
+            emergency.location.lat,
+            emergency.location.lng,
           ]}
           icon={redIcon}
         >
           <Popup>
             <strong>🚨 Emergency</strong>
+
             <br />
+
             Patient: {emergency.patientId}
+
             <br />
-            Latitude: {emergency.latitude}
+
+            Latitude: {emergency.location.lat}
+
             <br />
-            Longitude: {emergency.longitude}
+
+            Longitude: {emergency.location.lng}
+
+            <br />
+
+            Hospital: {emergency.hospitalName}
+
+            <br />
+
+            ETA:{" "}
+            {emergency.etaMinutes !== null
+              ? `${emergency.etaMinutes} minutes`
+              : "Calculating..."}
           </Popup>
         </Marker>
       ))}
