@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { socket } from "../services/socket";
+import { useEffect, useState, useRef } from "react";
+import { createSocket } from "../services/socket";
 import type { EmergencyIncident } from "../types/emergency";
 import EmergencyMap from "../components/EmergencyMap";
 import { supabase } from "../lib/supabase";
@@ -18,12 +18,21 @@ interface HospitalAnalytics {
 }
 
 export default function Dashboard() {
-  const [incidents, setIncidents] = useState<IncidentWithAction[]>([]);
-  const [analytics, setAnalytics] = useState<HospitalAnalytics[]>([]);
+  const [incidents, setIncidents] = useState<
+    IncidentWithAction[]
+  >([]);
 
-  // ================================
+  const [analytics, setAnalytics] = useState<
+    HospitalAnalytics[]
+  >([]);
+
+  // Authenticated Socket.IO connection
+  const socketRef = useRef<any>(null);
+
+  // ========================================
   // FETCH HOSPITAL ANALYTICS
-  // ================================
+  // ========================================
+
   const fetchAnalytics = async () => {
     const { data, error } = await supabase
       .from("hospital_analytics")
@@ -39,17 +48,42 @@ export default function Dashboard() {
     setAnalytics(data ?? []);
   };
 
-  // Fetch analytics when dashboard loads
+  // ========================================
+  // LOAD ANALYTICS
+  // ========================================
+
   useEffect(() => {
     fetchAnalytics();
   }, []);
 
-  // ================================
-  // SOCKET.IO EMERGENCY LISTENER
-  // ================================
+  // ========================================
+  // AUTHENTICATED SOCKET.IO
+  // ========================================
+
   useEffect(() => {
-    const handleEmergency = (incident: EmergencyIncident) => {
-      console.log("🚨 Emergency received:", incident);
+    const token = localStorage.getItem("access_token");
+
+    if (!token) {
+      console.error("❌ No access token found");
+      return;
+    }
+
+    console.log(
+      "🔑 Dashboard socket token exists:",
+      !!token
+    );
+
+    const socket = createSocket(token);
+
+    socketRef.current = socket;
+
+    const handleEmergency = (
+      incident: EmergencyIncident
+    ) => {
+      console.log(
+        "🚨 Emergency received:",
+        incident
+      );
 
       setIncidents((previous) => [
         incident,
@@ -57,16 +91,27 @@ export default function Dashboard() {
       ]);
     };
 
-    socket.on("EMERGENCY_BROADCAST", handleEmergency);
+    socket.on(
+      "EMERGENCY_BROADCAST",
+      handleEmergency
+    );
 
     return () => {
-      socket.off("EMERGENCY_BROADCAST", handleEmergency);
+      socket.off(
+        "EMERGENCY_BROADCAST",
+        handleEmergency
+      );
+
+      socket.disconnect();
+
+      socketRef.current = null;
     };
   }, []);
 
-  // ================================
+  // ========================================
   // ACCEPT EMERGENCY
-  // ================================
+  // ========================================
+
   const handleAccept = (
     patientId: string,
     hospitalName: string,
@@ -77,12 +122,16 @@ export default function Dashboard() {
       hospitalName,
     });
 
-    socket.emit("HOSPITAL_ACCEPTED", {
-      patientId,
-      hospitalName,
-    });
+    // Emit through authenticated socket
+    socketRef.current?.emit(
+      "HOSPITAL_ACCEPTED",
+      {
+        patientId,
+        hospitalName,
+      }
+    );
 
-    // Immediately update UI
+    // Update UI immediately
     setIncidents((previous) =>
       previous.map((incident, i) =>
         i === index
@@ -100,9 +149,10 @@ export default function Dashboard() {
     }, 1000);
   };
 
-  // ================================
+  // ========================================
   // REJECT EMERGENCY
-  // ================================
+  // ========================================
+
   const handleReject = (
     patientId: string,
     hospitalName: string,
@@ -113,12 +163,16 @@ export default function Dashboard() {
       hospitalName,
     });
 
-    socket.emit("HOSPITAL_REJECTED", {
-      patientId,
-      hospitalName,
-    });
+    // Emit through authenticated socket
+    socketRef.current?.emit(
+      "HOSPITAL_REJECTED",
+      {
+        patientId,
+        hospitalName,
+      }
+    );
 
-    // Immediately update UI
+    // Update UI immediately
     setIncidents((previous) =>
       previous.map((incident, i) =>
         i === index
@@ -136,38 +190,45 @@ export default function Dashboard() {
     }, 1000);
   };
 
-  // ================================
-  // CALCULATE TOTAL SYSTEM STATS
-  // ================================
+  // ========================================
+  // SYSTEM STATISTICS
+  // ========================================
 
   const totalEmergencies = analytics.reduce(
     (total, hospital) =>
-      total + Number(hospital.total_emergencies || 0),
+      total +
+      Number(
+        hospital.total_emergencies || 0
+      ),
     0
   );
 
   const totalAccepted = analytics.reduce(
     (total, hospital) =>
-      total + Number(hospital.accepted_cases || 0),
+      total +
+      Number(
+        hospital.accepted_cases || 0
+      ),
     0
   );
 
   const totalRejected = analytics.reduce(
     (total, hospital) =>
-      total + Number(hospital.rejected_cases || 0),
+      total +
+      Number(
+        hospital.rejected_cases || 0
+      ),
     0
   );
 
-  // ================================
+  // ========================================
   // UI
-  // ================================
+  // ========================================
 
   return (
     <div className="min-h-screen bg-slate-100 p-8">
 
-      {/* ================================
-          HEADER
-      ================================= */}
+      {/* HEADER */}
 
       <h1 className="mb-2 text-3xl font-bold text-slate-900">
         Hospital Emergency Dashboard
@@ -177,9 +238,9 @@ export default function Dashboard() {
         Real-time incoming emergency incidents
       </p>
 
-      {/* ================================
+      {/* =====================================
           SYSTEM STATS
-      ================================= */}
+      ====================================== */}
 
       <div className="mb-8">
 
@@ -189,7 +250,7 @@ export default function Dashboard() {
 
         <div className="grid gap-4 md:grid-cols-3">
 
-          {/* TOTAL EMERGENCIES */}
+          {/* TOTAL */}
 
           <div className="rounded-xl bg-white p-6 shadow">
 
@@ -235,9 +296,9 @@ export default function Dashboard() {
 
       </div>
 
-      {/* ================================
+      {/* =====================================
           HOSPITAL ANALYTICS
-      ================================= */}
+      ====================================== */}
 
       {analytics.length > 0 && (
         <div className="mb-8 rounded-xl bg-white p-6 shadow">
@@ -251,7 +312,9 @@ export default function Dashboard() {
             {analytics.map((hospital) => (
 
               <div
-                key={hospital.assigned_hospital_name}
+                key={
+                  hospital.assigned_hospital_name
+                }
                 className="rounded-lg border border-slate-200 p-4"
               >
 
@@ -314,9 +377,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ================================
+      {/* =====================================
           LIVE MAP
-      ================================= */}
+      ====================================== */}
 
       <div className="mb-8 overflow-hidden rounded-xl bg-white shadow">
 
@@ -326,9 +389,9 @@ export default function Dashboard() {
 
       </div>
 
-      {/* ================================
+      {/* =====================================
           INCIDENTS
-      ================================= */}
+      ====================================== */}
 
       {incidents.length === 0 ? (
 
@@ -344,174 +407,176 @@ export default function Dashboard() {
 
         <div className="space-y-4">
 
-          {incidents.map((incident, index) => (
+          {incidents.map(
+            (incident, index) => (
 
-            <div
-              key={`${incident.patientId}-${incident.timestamp}-${index}`}
-              className={`rounded-xl border-l-4 bg-white p-6 shadow transition-all ${
-                incident.action === "Accepted"
-                  ? "border-green-600"
-                  : incident.action === "Rejected"
-                  ? "border-red-600 opacity-70"
-                  : "border-red-600"
-              }`}
-            >
-
-              {/* CARD HEADER */}
-
-              <div className="mb-4 flex items-center justify-between">
-
-                <h2
-                  className={`text-xl font-bold ${
-                    incident.action === "Accepted"
-                      ? "text-green-600"
-                      : incident.action === "Rejected"
-                      ? "text-red-600"
-                      : "text-red-600"
-                  }`}
-                >
-
-                  {incident.action === "Accepted"
-                    ? "✅ Emergency Accepted"
+              <div
+                key={`${incident.patientId}-${incident.timestamp}-${index}`}
+                className={`rounded-xl border-l-4 bg-white p-6 shadow transition-all ${
+                  incident.action === "Accepted"
+                    ? "border-green-600"
                     : incident.action === "Rejected"
-                    ? "❌ Emergency Rejected"
-                    : "🚨 Emergency Alert"}
+                    ? "border-red-600 opacity-70"
+                    : "border-red-600"
+                }`}
+              >
 
-                </h2>
+                {/* CARD HEADER */}
 
-                <span
-                  className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                    incident.action === "Accepted"
-                      ? "bg-green-100 text-green-700"
+                <div className="mb-4 flex items-center justify-between">
+
+                  <h2
+                    className={`text-xl font-bold ${
+                      incident.action === "Accepted"
+                        ? "text-green-600"
+                        : incident.action === "Rejected"
+                        ? "text-red-600"
+                        : "text-red-600"
+                    }`}
+                  >
+
+                    {incident.action === "Accepted"
+                      ? "✅ Emergency Accepted"
                       : incident.action === "Rejected"
-                      ? "bg-red-100 text-red-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
+                      ? "❌ Emergency Rejected"
+                      : "🚨 Emergency Alert"}
 
-                  {incident.action ??
-                    incident.status ??
-                    "Emergency"}
+                  </h2>
 
-                </span>
-
-              </div>
-
-              {/* INCIDENT DETAILS */}
-
-              <div className="grid gap-3 sm:grid-cols-4">
-
-                <div>
-
-                  <p className="text-sm text-slate-500">
-                    Patient ID
-                  </p>
-
-                  <p className="font-semibold">
-                    {incident.patientId}
-                  </p>
-
-                </div>
-
-                <div>
-
-                  <p className="text-sm text-slate-500">
-                    Latitude
-                  </p>
-
-                  <p className="font-semibold">
-                    {incident.location.lat}
-                  </p>
-
-                </div>
-
-                <div>
-
-                  <p className="text-sm text-slate-500">
-                    Longitude
-                  </p>
-
-                  <p className="font-semibold">
-                    {incident.location.lng}
-                  </p>
-
-                </div>
-
-                <div>
-
-                  <p className="text-sm text-slate-500">
-                    Hospital
-                  </p>
-
-                  <p className="font-semibold">
-                    {incident.hospitalName}
-                  </p>
-
-                </div>
-
-              </div>
-
-              {/* ETA */}
-
-              <div className="mt-4">
-
-                <p className="text-sm text-slate-500">
-                  ETA
-                </p>
-
-                <p className="font-semibold">
-
-                  {incident.etaMinutes !== null
-                    ? `${incident.etaMinutes} minutes`
-                    : "Calculating..."}
-
-                </p>
-
-              </div>
-
-              {/* ACTION BUTTONS */}
-
-              {!incident.action && (
-
-                <div className="mt-6 flex gap-4">
-
-                  {/* ACCEPT */}
-
-                  <button
-                    onClick={() =>
-                      handleAccept(
-                        incident.patientId,
-                        incident.hospitalName,
-                        index
-                      )
-                    }
-                    className="rounded-lg bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700"
+                  <span
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                      incident.action === "Accepted"
+                        ? "bg-green-100 text-green-700"
+                        : incident.action === "Rejected"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
                   >
-                    ✅ Accept Emergency
-                  </button>
 
-                  {/* REJECT */}
+                    {incident.action ??
+                      incident.status ??
+                      "Emergency"}
 
-                  <button
-                    onClick={() =>
-                      handleReject(
-                        incident.patientId,
-                        incident.hospitalName,
-                        index
-                      )
-                    }
-                    className="rounded-lg bg-red-600 px-6 py-3 font-semibold text-white transition hover:bg-red-700"
-                  >
-                    ❌ Reject - Capacity Full
-                  </button>
+                  </span>
 
                 </div>
 
-              )}
+                {/* INCIDENT DETAILS */}
 
-            </div>
+                <div className="grid gap-3 sm:grid-cols-4">
 
-          ))}
+                  <div>
+
+                    <p className="text-sm text-slate-500">
+                      Patient ID
+                    </p>
+
+                    <p className="font-semibold">
+                      {incident.patientId}
+                    </p>
+
+                  </div>
+
+                  <div>
+
+                    <p className="text-sm text-slate-500">
+                      Latitude
+                    </p>
+
+                    <p className="font-semibold">
+                      {incident.location.lat}
+                    </p>
+
+                  </div>
+
+                  <div>
+
+                    <p className="text-sm text-slate-500">
+                      Longitude
+                    </p>
+
+                    <p className="font-semibold">
+                      {incident.location.lng}
+                    </p>
+
+                  </div>
+
+                  <div>
+
+                    <p className="text-sm text-slate-500">
+                      Hospital
+                    </p>
+
+                    <p className="font-semibold">
+                      {incident.hospitalName}
+                    </p>
+
+                  </div>
+
+                </div>
+
+                {/* ETA */}
+
+                <div className="mt-4">
+
+                  <p className="text-sm text-slate-500">
+                    ETA
+                  </p>
+
+                  <p className="font-semibold">
+
+                    {incident.etaMinutes !== null
+                      ? `${incident.etaMinutes} minutes`
+                      : "Calculating..."}
+
+                  </p>
+
+                </div>
+
+                {/* ACTION BUTTONS */}
+
+                {!incident.action && (
+
+                  <div className="mt-6 flex gap-4">
+
+                    {/* ACCEPT */}
+
+                    <button
+                      onClick={() =>
+                        handleAccept(
+                          incident.patientId,
+                          incident.hospitalName,
+                          index
+                        )
+                      }
+                      className="rounded-lg bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700"
+                    >
+                      ✅ Accept Emergency
+                    </button>
+
+                    {/* REJECT */}
+
+                    <button
+                      onClick={() =>
+                        handleReject(
+                          incident.patientId,
+                          incident.hospitalName,
+                          index
+                        )
+                      }
+                      className="rounded-lg bg-red-600 px-6 py-3 font-semibold text-white transition hover:bg-red-700"
+                    >
+                      ❌ Reject - Capacity Full
+                    </button>
+
+                  </div>
+
+                )}
+
+              </div>
+
+            )
+          )}
 
         </div>
 
