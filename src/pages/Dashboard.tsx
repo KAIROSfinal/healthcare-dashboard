@@ -26,6 +26,8 @@ export default function Dashboard() {
     HospitalAnalytics[]
   >([]);
 
+  const [hospitalName, setHospitalName] = useState("Hospital");
+
   // Authenticated Socket.IO connection
   const socketRef = useRef<any>(null);
 
@@ -33,20 +35,32 @@ export default function Dashboard() {
   // FETCH HOSPITAL ANALYTICS
   // ========================================
 
-  const fetchAnalytics = async () => {
-    const { data, error } = await supabase
-      .from("hospital_analytics")
-      .select("*");
+ const fetchAnalytics = async () => {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-    if (error) {
-      console.error("❌ Analytics Error:", error);
-      return;
-    }
+  if (userError || !user) {
+    console.error("❌ No authenticated user:", userError);
+    return;
+  }
 
-    console.log("📊 Hospital Analytics:", data);
+  const { data, error } = await supabase
+    .from("hospital_analytics")
+    .select("*")
+    .eq("assigned_hospital_id", user.id)
+    .single();
 
-    setAnalytics(data ?? []);
-  };
+  if (error) {
+    console.error("❌ Analytics Error:", error);
+    return;
+  }
+
+  console.log("📊 Hospital Analytics:", data);
+
+  setAnalytics(data ? [data] : []);
+};
 
   // ========================================
   // LOAD ANALYTICS
@@ -55,6 +69,82 @@ export default function Dashboard() {
   useEffect(() => {
     fetchAnalytics();
   }, []);
+
+// ========================================
+// RESTORE PENDING INCIDENTS
+// ========================================
+
+useEffect(() => {
+  const hydratePendingIncidents = async () => {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      console.error("❌ No authenticated user:", userError);
+      return;
+    }
+
+    console.log("👤 Logged-in user:", user.id);
+
+    const { data, error } = await supabase
+      .from("EmergencyIncident")
+      .select("*")
+      .eq("assigned_hospital_id", user.id)
+      .eq("status", "PENDING")
+      .order("createdAt", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error("❌ Failed to restore incidents:", error);
+      return;
+    }
+
+    console.log("🔄 Restored pending incidents:", data);
+
+    if (data) {
+      setIncidents(data);
+    }
+  };
+
+  hydratePendingIncidents();
+}, []);
+
+// ========================================
+// LOAD HOSPITAL PROFILE
+// ========================================
+
+useEffect(() => {
+  const loadHospitalProfile = async () => {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      console.error("❌ No authenticated user:", userError);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("hospitals")
+      .select("name, available_beds")
+      .eq("id", user.id)
+      .single();
+
+    if (error) {
+      console.error("❌ Hospital profile error:", error);
+      return;
+    }
+
+    console.log("🏥 Hospital Profile:", data);
+
+    setHospitalName(data.name);
+  };
+
+  loadHospitalProfile();
+}, []);
 
   // ========================================
   // AUTHENTICATED SOCKET.IO
@@ -231,7 +321,7 @@ export default function Dashboard() {
       {/* HEADER */}
 
       <h1 className="mb-2 text-3xl font-bold text-slate-900">
-        Hospital Emergency Dashboard
+        {hospitalName} Emergency Dashboard
       </h1>
 
       <p className="mb-8 text-slate-500">

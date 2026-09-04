@@ -3,7 +3,10 @@ import {
   TileLayer,
   Marker,
   Popup,
+  useMap,
 } from "react-leaflet";
+
+import { useEffect } from "react";
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -37,6 +40,20 @@ interface EmergencyMapProps {
   emergencies: Emergency[];
 }
 
+function ChangeMapView({
+  center,
+}: {
+  center: [number, number];
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setView(center);
+  }, [map, center]);
+
+  return null;
+}
+
 const EmergencyMap = ({
   emergencies,
 }: EmergencyMapProps) => {
@@ -45,14 +62,18 @@ const EmergencyMap = ({
     80.2707,
   ];
 
-  const firstEmergency = emergencies[0];
+const firstEmergency = emergencies.find(
+  (emergency) =>
+    Number.isFinite(emergency.location?.lat) &&
+    Number.isFinite(emergency.location?.lng)
+);
 
-  const center: [number, number] = firstEmergency
-    ? [
-        firstEmergency.location.lat,
-        firstEmergency.location.lng,
-      ]
-    : defaultPosition;
+const center: [number, number] = firstEmergency
+  ? [
+      firstEmergency.location.lat,
+      firstEmergency.location.lng,
+    ]
+  : defaultPosition;
 
   return (
     <MapContainer
@@ -62,21 +83,30 @@ const EmergencyMap = ({
         height: "500px",
         width: "100%",
       }}
-    >
+    > 
+    <ChangeMapView center={center} />
       <TileLayer
         attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      {emergencies.map((emergency, index) => (
-        <Marker
-          key={`${emergency.patientId}-${index}`}
-          position={[
-            emergency.location.lat,
-            emergency.location.lng,
-          ]}
-          icon={redIcon}
-        >
+     {emergencies.map((emergency, index) => {
+  if (
+    !Number.isFinite(emergency.location?.lat) ||
+    !Number.isFinite(emergency.location?.lng)
+  ) {
+    return null;
+  }
+
+  return (
+    <Marker
+      key={`${emergency.patientId}-${index}`}
+      position={[
+        emergency.location.lat,
+        emergency.location.lng,
+      ]}
+      icon={redIcon}
+    >
           <Popup>
             <strong>🚨 Emergency</strong>
 
@@ -103,8 +133,9 @@ const EmergencyMap = ({
               ? `${emergency.etaMinutes} minutes`
               : "Calculating..."}
           </Popup>
-        </Marker>
-      ))}
+               </Marker>
+      );
+    })}
     </MapContainer>
   );
 };
