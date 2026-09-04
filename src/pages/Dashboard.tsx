@@ -47,19 +47,18 @@ export default function Dashboard() {
   }
 
   const { data, error } = await supabase
-    .from("hospital_analytics")
-    .select("*")
-    .eq("assigned_hospital_id", user.id)
-    .single();
+  .from("hospital_analytics")
+  .select("*")
+  .eq("assigned_hospital_id", user.id);
 
-  if (error) {
-    console.error("❌ Analytics Error:", error);
-    return;
-  }
+if (error) {
+  console.error("❌ Analytics Error:", error);
+  return;
+}
 
-  console.log("📊 Hospital Analytics:", data);
+console.log("📊 Hospital Analytics:", data);
 
-  setAnalytics(data ? [data] : []);
+setAnalytics(data ?? []);
 };
 
   // ========================================
@@ -103,9 +102,33 @@ useEffect(() => {
 
     console.log("🔄 Restored pending incidents:", data);
 
-    if (data) {
-      setIncidents(data);
-    }
+   if (data && data.length > 0) {
+  const mappedIncidents = data.map((incident: any) => ({
+    ...incident,
+
+    patientId:
+      incident.patientId ?? incident.patient_id,
+
+    location: {
+      lat:
+        incident.latitude ??
+        incident.lat ??
+        incident.location?.lat,
+
+      lng:
+        incident.longitude ??
+        incident.lng ??
+        incident.location?.lng,
+    },
+  }));
+
+  console.log(
+    "🔄 Restored pending incidents:",
+    mappedIncidents
+  );
+
+  setIncidents(mappedIncidents);
+}
   };
 
   hydratePendingIncidents();
@@ -127,11 +150,11 @@ useEffect(() => {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("hospitals")
-      .select("name, available_beds")
-      .eq("id", user.id)
-      .single();
+   const { data, error } = await supabase
+  .from("hospitals")
+  .select("name, available_beds")
+  .eq("id", user.id)
+  .single();
 
     if (error) {
       console.error("❌ Hospital profile error:", error);
@@ -167,19 +190,29 @@ useEffect(() => {
 
     socketRef.current = socket;
 
-    const handleEmergency = (
-      incident: EmergencyIncident
-    ) => {
-      console.log(
-        "🚨 Emergency received:",
-        incident
-      );
+  const handleEmergency = (incident: EmergencyIncident) => {
+  console.log("🚨 Emergency received:", incident);
 
-      setIncidents((previous) => [
-        incident,
-        ...previous,
-      ]);
-    };
+  const mappedIncident: IncidentWithAction = {
+    ...incident,
+    location: {
+      lat:
+        (incident as any).latitude ??
+        (incident as any).lat ??
+        incident.location?.lat,
+
+      lng:
+        (incident as any).longitude ??
+        (incident as any).lng ??
+        incident.location?.lng,
+    },
+  };
+
+  setIncidents((previous) => [
+    mappedIncident,
+    ...previous,
+  ]);
+};
 
     socket.on(
       "EMERGENCY_BROADCAST",
