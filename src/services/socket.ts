@@ -10,9 +10,11 @@ export const createSocket = (accessToken: string) => {
   );
 
   const socket = io(SOCKET_URL, {
-    transports: ["websocket"],
+    transports: ["polling", "websocket"],
     autoConnect: false,
-
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
     auth: {
       token: accessToken,
     },
